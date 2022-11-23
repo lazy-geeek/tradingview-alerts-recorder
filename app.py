@@ -13,10 +13,6 @@ app = Flask(__name__)
 
 load_dotenv()
 
-bybit_session = usdt_perpetual.HTTP(
-    endpoint="https://api.bybit.com"
-)
-
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("SQLALCHEMY_DATABASE_URI")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -46,6 +42,10 @@ def webhook():
     action = data["action"]    
     chartTime = parser.parse(data["time"])
     chartPrice = data["price"]
+    
+    bybit_session = usdt_perpetual.HTTP(
+        endpoint="https://api.bybit.com"
+    )
     
     response = bybit_session.latest_information_for_symbol(
         symbol=ticker
