@@ -18,6 +18,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+app.app_context().push()
+
 class Alert(db.Model):                              # type: ignore
     id = db.Column(db.Integer, primary_key=True)
     strategy = db.Column(db.String(100))
