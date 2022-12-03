@@ -1,7 +1,8 @@
 import json
 import os
+import pandas as pd
 
-from flask import Flask, request
+from flask import Flask, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 # from pprint import pprint
 from dotenv import load_dotenv
@@ -32,6 +33,8 @@ class Alert(db.Model):                              # type: ignore
     price = db.Column(db.Numeric(20,10))    
 
 db.create_all()
+
+pd.options.display.float_format = '{:,.2f}'.format      # type: ignore
 
 @ app.route('/webhook', methods=['POST'])
 def webhook():
@@ -81,7 +84,6 @@ def webhook():
         "code": "success"
     }
 
-
 @ app.route('/alerts')
 def alertsStatus():    
 
@@ -89,3 +91,168 @@ def alertsStatus():
         "alerts": "alerts"
     }
     
+@ app.route('/trade', methods=['GET'])
+def trade():    
+    
+    leverage = int(request.args.get('leverage'))            # type: ignore
+    risk = float(request.args.get('risk'))                  # type: ignore
+    startBalance = int(request.args.get('startBalance'))    # type: ignore
+    fees = float(request.args.get('fees'))                  # type: ignore
+    
+    df = pd.DataFrame()
+    
+    strategies = []
+    strategyRows = db.session.query(Alert.strategy).distinct().all()
+    for strategyRow in strategyRows:
+        strategy = strategyRow["strategy"]
+        strategies.append(strategy)    
+        
+    for strategy in strategies:
+    
+        tickers = []
+        
+        tickerRows = db.session.query(Alert.ticker).filter(Alert.strategy == strategy).distinct().all()
+        for tickerRow in tickerRows:
+            ticker = tickerRow["ticker"]
+            tickers.append(ticker)        
+        
+        for ticker in tickers:      
+                        
+            intervals = []  
+            
+            intervalRows = db.session.query(Alert.interval).filter(Alert.strategy == strategy, Alert.ticker == ticker).distinct().all()
+            for intervalRow in intervalRows:                
+                interval = intervalRow["interval"]
+                intervals.append(interval)                
+                
+            for interval in intervals:                
+                
+                alerts = Alert.query.filter(Alert.strategy == strategy, Alert.ticker == ticker, Alert.interval == interval).order_by(Alert.id).all()
+                    
+                rowCounter = 0
+                lastAction = ""                    
+                currBalance = startBalance
+                lastBalance = 0                    
+                noOfTrades = 0
+                noOfTradesWon = 0
+                noOfTradesLost = 0
+                highestProfit = 0
+                highestLoss = 0
+                coinAmount = 0
+                positionCost = 0
+                alertTime = None
+                startDateTime = None
+                endDateTime = None
+
+                for alert in alerts:
+                    
+                    rowCounter += 1
+                    
+                    alertTime = alert.time
+                    alertTicker = alert.ticker
+                    alertInterval = alert.interval
+                    alertAction = alert.action
+                    alertPrice = float(alert.price)
+
+                    if rowCounter == 1:
+                        startDateTime = alertTime
+
+                    if alertAction != lastAction:
+
+                        if coinAmount > 0:
+
+                            noOfTrades += 1
+
+                            # Close Position -> Not for first alert
+
+                            feesAmount = coinAmount * alertPrice * fees
+                            closeReturn = coinAmount * alertPrice - feesAmount
+
+                            if lastAction == 'sell':
+                                profit = positionCost - closeReturn
+                            else:
+                                profit = closeReturn - positionCost
+                                                        
+                            """
+                            if alertAction == 'buy':
+                                profit = positionCost - closeReturn
+                            else:
+                                profit = closeReturn - positionCost
+                            """
+
+                            currBalance = lastBalance + profit
+
+                            profitPercent = (currBalance / lastBalance - 1) * leverage * 100
+
+                            if profitPercent >= 0:
+                                noOfTradesWon += 1
+                            else:
+                                noOfTradesLost += 1
+
+                            if profitPercent > highestProfit:
+                                highestProfit = profitPercent
+                            if profitPercent < highestLoss:
+                                highestLoss = profitPercent                                
+                            
+                        # Open new position
+                        
+                        if alertAction in ['buy','sell']:
+                            buyBalance = currBalance * risk
+                            feesAmount = buyBalance * leverage * fees
+                            coinAmount = (buyBalance * leverage - feesAmount) / alertPrice
+                            positionCost = buyBalance * leverage
+                            lastBalance = currBalance
+                            lastPrice = alertPrice
+                        else: # Position closed
+                            coinAmount = 0
+
+                    lastAction = alertAction
+
+                profitPercent = (currBalance / startBalance - 1) * 100
+                if noOfTrades > 0:
+                    winRate = noOfTradesWon / noOfTrades
+                else:
+                    winRate = 0
+                endDateTime = alertTime                                    
+                timeDiff = endDateTime - startDateTime                   # type: ignore  
+                tradeHours = round(timeDiff.total_seconds() / 3600, 0)                    
+                
+                resultData = {}
+                resultData["strategy"] = strategy
+                resultData["ticker"] = ticker                    
+                resultData["interval"] = interval
+                resultData["leverage"] = leverage
+                resultData["risk"] = risk
+                resultData["endBalance"] = currBalance
+                resultData["profit"] = profitPercent
+                resultData["noOfTrades"] = noOfTrades
+                resultData["noOfTradesWon"] = noOfTradesWon
+                resultData["noOfTradesLost"] = noOfTradesLost
+                resultData["winRate"] = winRate
+                resultData["tradeHours"] = tradeHours
+                
+                df = df.append(resultData, ignore_index=True)                        
+    
+    df.sort_values(['ticker','profit'], inplace=True, ascending=False)
+    df['interval'] = df['interval'].map('{:,.0f}'.format)
+    df['leverage'] = df['leverage'].map('{:,.0f}'.format)
+    df['noOfTrades'] = df['noOfTrades'].map('{:,.0f}'.format)
+    df['noOfTradesWon'] = df['noOfTradesWon'].map('{:,.0f}'.format)
+    df['noOfTradesLost'] = df['noOfTradesLost'].map('{:,.0f}'.format)
+    df['tradeHours'] = df['tradeHours'].map('{:,.0f}'.format)
+    
+    df.rename(columns={ 'strategy': 'Strategy',
+                        'ticker': 'Ticker',
+                        'interval': 'Interval min',
+                        'leverage': 'Leverage',
+                        'risk': 'Risk',
+                        'endBalance': 'End balance',
+                        'profit': 'Profit %',
+                        'noOfTrades': 'No. of trades',
+                        'noOfTradesWon': 'No. of trades won',
+                        'noOfTradesLost': 'No. of trades lost',
+                        'winRate': 'Win rate',
+                        'tradeHours': "Trading hours"
+                            }, inplace=True)
+
+    return render_template('data.html', tables=[df.to_html(classes='data', header=True)])

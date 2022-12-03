@@ -6,3 +6,4 @@ pybit
 ciso8601
 mysqlclient
 python-dateutil
+pandas
