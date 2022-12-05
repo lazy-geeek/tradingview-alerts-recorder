@@ -98,9 +98,12 @@ def trade():
     risk = float(request.args.get('risk'))                  # type: ignore
     startBalance = int(request.args.get('startBalance'))    # type: ignore
     fees = float(request.args.get('fees'))                  # type: ignore
+    debug = False
+    if request.args.get('debug') == 'True':
+        debug = True
     
-    df = pd.DataFrame()
-    af = pd.DataFrame()
+    resultDatas = []
+    alertDatas = []
     
     strategies = []
     strategyRows = db.session.query(Alert.strategy).distinct().all()
@@ -182,12 +185,6 @@ def trade():
                             else:
                                 profit = closeReturn - positionCost
                                                         
-                            """
-                            if alertAction == 'buy':
-                                profit = positionCost - closeReturn
-                            else:
-                                profit = closeReturn - positionCost
-                            """
 
                             currBalance = lastBalance + profit
 
@@ -197,11 +194,6 @@ def trade():
                                 noOfTradesWon += 1
                             else:
                                 noOfTradesLost += 1
-
-                            if profitPercent > highestProfit:
-                                highestProfit = profitPercent
-                            if profitPercent < highestLoss:
-                                highestLoss = profitPercent                                
                             
                         # Open new position
                         
@@ -239,7 +231,7 @@ def trade():
                     alertData["openCoinAmount"] = openCoinAmount        # type: ignore
                     alertData["positionCost"] = positionCost            # type: ignore
                     
-                    af = af.append(alertData, ignore_index=True)                    
+                    alertDatas.append(alertData)                    
 
                 profitPercent = (currBalance / startBalance - 1) * 100
                 if noOfTrades > 0:
@@ -264,7 +256,9 @@ def trade():
                 resultData["winRate"] = winRate
                 resultData["tradeHours"] = tradeHours
                 
-                df = df.append(resultData, ignore_index=True)                        
+                resultDatas.append(resultData)                        
+    
+    df = pd.DataFrame(resultDatas)
     
     df.sort_values(['ticker','profit'], inplace=True, ascending=False)
     df['interval'] = df['interval'].map('{:,.0f}'.format)
@@ -288,4 +282,9 @@ def trade():
                         'tradeHours': "Trading hours"
                             }, inplace=True)
 
-    return render_template('data.html', tables=[af.to_html(classes='data', header=True)])
+    af = pd.DataFrame(alertDatas)
+
+    if debug:
+        return render_template('data.html', tables=[af.to_html(classes='data', header=True)])
+    else:
+        return render_template('data.html', tables=[df.to_html(classes='data', header=True)])
