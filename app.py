@@ -98,23 +98,38 @@ def trade():
     risk = float(request.args.get('risk'))                  # type: ignore
     startBalance = int(request.args.get('startBalance'))    # type: ignore
     fees = float(request.args.get('fees'))                  # type: ignore
+    strategyPar = request.args.get('strategy', None)
+    tickerPar = request.args.get('ticker', None)
     
-    df = pd.DataFrame()
+    if request.args.get('debug') == 'True':
+        debug = True
+    else:
+        debug = False
+    
+    resultDatas = []
+    alertDatas = []
     
     strategies = []
-    strategyRows = db.session.query(Alert.strategy).distinct().all()
-    for strategyRow in strategyRows:
-        strategy = strategyRow["strategy"]
-        strategies.append(strategy)    
-        
+    
+    if strategyPar is not None:
+        strategies.append(strategyPar)    
+    else :
+        strategyRows = db.session.query(Alert.strategy).distinct().all()
+        for strategyRow in strategyRows:
+            strategy = strategyRow["strategy"]
+            strategies.append(strategy)    
+            
     for strategy in strategies:
     
         tickers = []
         
-        tickerRows = db.session.query(Alert.ticker).filter(Alert.strategy == strategy).distinct().all()
-        for tickerRow in tickerRows:
-            ticker = tickerRow["ticker"]
-            tickers.append(ticker)        
+        if tickerPar is not None:
+            tickers.append(tickerPar)
+        else:
+            tickerRows = db.session.query(Alert.ticker).filter(Alert.strategy == strategy).distinct().all()
+            for tickerRow in tickerRows:
+                ticker = tickerRow["ticker"]
+                tickers.append(ticker)        
         
         for ticker in tickers:      
                         
@@ -129,7 +144,7 @@ def trade():
                 
                 alerts = Alert.query.filter(Alert.strategy == strategy, Alert.ticker == ticker, Alert.interval == interval).order_by(Alert.id).all()
                     
-                rowCounter = 0
+                rowCounter = 0                
                 lastAction = ""                    
                 currBalance = startBalance
                 lastBalance = 0                    
@@ -145,6 +160,15 @@ def trade():
                 endDateTime = None
 
                 for alert in alerts:
+      
+                    alertData = {}
+                    closeFeesAmount = 0
+                    closeCoinAmount = 0
+                    closeReturn = 0
+                    profit = 0
+                    profitPercent = 0
+                    buyBalance = 0
+                    openFeesAmount = 0
                     
                     rowCounter += 1
                     
@@ -165,48 +189,66 @@ def trade():
 
                             # Close Position -> Not for first alert
 
-                            feesAmount = coinAmount * alertPrice * fees
-                            closeReturn = coinAmount * alertPrice - feesAmount
-
+                            closeCoinAmount = coinAmount
+                            closeFeesAmount = coinAmount * alertPrice * fees
+                            
                             if lastAction == 'sell':
+                                closeReturn = coinAmount * alertPrice + closeFeesAmount
                                 profit = positionCost - closeReturn
-                            else:
+                            if lastAction == 'buy':
+                                closeReturn = coinAmount * alertPrice - closeFeesAmount
                                 profit = closeReturn - positionCost
-                                                        
-                            """
-                            if alertAction == 'buy':
-                                profit = positionCost - closeReturn
-                            else:
-                                profit = closeReturn - positionCost
-                            """
 
                             currBalance = lastBalance + profit
 
-                            profitPercent = (currBalance / lastBalance - 1) * leverage * 100
+                            profitPercent = (currBalance / lastBalance - 1) * 100
 
                             if profitPercent >= 0:
                                 noOfTradesWon += 1
                             else:
                                 noOfTradesLost += 1
-
-                            if profitPercent > highestProfit:
-                                highestProfit = profitPercent
-                            if profitPercent < highestLoss:
-                                highestLoss = profitPercent                                
                             
                         # Open new position
                         
                         if alertAction in ['buy','sell']:
                             buyBalance = currBalance * risk
-                            feesAmount = buyBalance * leverage * fees
-                            coinAmount = (buyBalance * leverage - feesAmount) / alertPrice
+                            openFeesAmount = buyBalance * leverage * fees
                             positionCost = buyBalance * leverage
+                            if alertAction == 'buy':
+                                coinAmount = (positionCost - openFeesAmount) / alertPrice
+                            if alertAction == 'sell':
+                                coinAmount = (positionCost + openFeesAmount) / alertPrice 
+                            
                             lastBalance = currBalance
                             lastPrice = alertPrice
                         else: # Position closed
                             coinAmount = 0
+                            
+                        openCoinAmount = coinAmount
 
                     lastAction = alertAction
+                    
+                    alertData["counter"] = rowCounter
+                    alertData["strategy"] = strategy
+                    alertData["ticker"] = alertTicker
+                    alertData["interval"] = alertInterval
+                    alertData["leverage"] = alertInterval
+                    alertData["action"] = alertAction
+                    alertData["price"] = alertPrice
+                    alertData["fees"] = fees
+                    alertData["closeFeesAmount"] = closeFeesAmount      # type: ignore
+                    alertData["closeCoinAmount"] = closeCoinAmount      # type: ignore
+                    alertData["closeReturn"] = closeReturn              # type: ignore
+                    alertData["lastBalance"] = lastBalance              # type: ignore
+                    alertData["currBalance"] = currBalance
+                    alertData["profit"] = profit                        # type: ignore
+                    alertData["profitPercent"] = profitPercent          # type: ignore
+                    alertData["buyBalance"] = buyBalance                # type: ignore
+                    alertData["openFeesAmount"] = openFeesAmount        # type: ignore
+                    alertData["openCoinAmount"] = openCoinAmount        # type: ignore
+                    alertData["positionCost"] = positionCost            # type: ignore
+                    
+                    alertDatas.append(alertData)                    
 
                 profitPercent = (currBalance / startBalance - 1) * 100
                 if noOfTrades > 0:
@@ -231,7 +273,9 @@ def trade():
                 resultData["winRate"] = winRate
                 resultData["tradeHours"] = tradeHours
                 
-                df = df.append(resultData, ignore_index=True)                        
+                resultDatas.append(resultData)                        
+    
+    df = pd.DataFrame(resultDatas)
     
     df.sort_values(['ticker','profit'], inplace=True, ascending=False)
     df['interval'] = df['interval'].map('{:,.0f}'.format)
@@ -255,4 +299,9 @@ def trade():
                         'tradeHours': "Trading hours"
                             }, inplace=True)
 
-    return render_template('data.html', tables=[df.to_html(classes='data', header=True)])
+    af = pd.DataFrame(alertDatas)
+
+    if debug:
+        return render_template('data.html', tables=[af.to_html(classes='data', header=True)])
+    else:
+        return render_template('data.html', tables=[df.to_html(classes='data', header=True)])
