@@ -7,3 +7,5 @@ ciso8601
 mysqlclient
 python-dateutil
 pandas
+binance-futures-connector
+binance-connector
