@@ -18,6 +18,8 @@ load_dotenv()
 
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("SQLALCHEMY_DATABASE_URI")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+binance_api_key = os.getenv("BINANCE_API_KEY")
+binance_secret = os.getenv("BINANCE_SECRET")
 
 db = SQLAlchemy(app)
 
@@ -98,7 +100,7 @@ def binanceperp():
     chartTime = parser.parse(data["time"])
     chartPrice = data["price"]
 
-    client = UMFutures()
+    client = UMFutures(binance_api_key, binance_secret)
 
     response = client.book_ticker(ticker)
 
@@ -141,7 +143,7 @@ def binancespot():
     chartTime = parser.parse(data["time"])
     chartPrice = data["price"]
 
-    client = BinanceSpot()
+    client = BinanceSpot(binance_api_key, binance_secret)
 
     response = client.book_ticker(ticker)
 
