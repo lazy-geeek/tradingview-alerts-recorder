@@ -11,6 +11,7 @@ from dateutil import parser
 from pybit import usdt_perpetual
 from binance.um_futures import UMFutures
 from binance.spot import Spot as BinanceSpot
+from binance import Client
 
 app = Flask(__name__)
 
@@ -172,6 +173,51 @@ def binancespot():
     db.session.commit()
 
     return {"code": "success"}
+
+
+@app.route("/binancetest", methods=["POST"])
+def binancetest():
+
+    data = json.loads(request.data)
+
+    strategy = data["strategy"]
+    ticker = data["ticker"]
+    interval = (data["interval"],)
+    action = data["action"]
+    chartTime = parser.parse(data["time"])
+    chartPrice = data["price"]
+
+    client = Client()
+
+    response = client.futures_orderbook_ticker(symbol=ticker)
+
+    bid = response["bidPrice"]
+    ask = response["askPrice"]
+
+    if action == "buy":
+        price = ask
+    else:
+        price = bid
+
+    time = datetime.now()
+
+    """
+    alert = Alert(
+        strategy=strategy,
+        ticker=ticker,
+        interval=interval,
+        action=action,
+        chartTime=chartTime,
+        time=time,
+        chartPrice=chartPrice,
+        price=price,
+    )
+
+    db.session.add(alert)
+    db.session.commit()
+    """
+
+    return {"price": price}
 
 
 @app.route("/alertprice", methods=["POST"])
