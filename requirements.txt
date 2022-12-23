@@ -9,4 +9,3 @@ python-dateutil
 pandas
 binance-futures-connector
 binance-connector
-python-binance

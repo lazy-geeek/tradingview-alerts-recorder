@@ -11,7 +11,7 @@ from dateutil import parser
 from pybit import usdt_perpetual
 from binance.um_futures import UMFutures
 from binance.spot import Spot as BinanceSpot
-from binance import Client
+from binance.error import ClientError, ServerError
 
 app = Flask(__name__)
 
@@ -19,8 +19,8 @@ load_dotenv()
 
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("SQLALCHEMY_DATABASE_URI")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-binance_api_key = os.getenv("BINANCE_API_KEY")
-binance_secret = os.getenv("BINANCE_SECRET")
+proxy = os.getenv("PROXY")
+proxy = f"http://{proxy}"
 
 db = SQLAlchemy(app)
 
@@ -101,7 +101,7 @@ def binanceperp():
     chartTime = parser.parse(data["time"])
     chartPrice = data["price"]
 
-    client = UMFutures(binance_api_key, binance_secret)
+    client = UMFutures()
 
     response = client.book_ticker(ticker)
 
@@ -144,7 +144,7 @@ def binancespot():
     chartTime = parser.parse(data["time"])
     chartPrice = data["price"]
 
-    client = BinanceSpot(binance_api_key, binance_secret)
+    client = BinanceSpot()
 
     response = client.book_ticker(ticker)
 
@@ -178,46 +178,25 @@ def binancespot():
 @app.route("/binancetest", methods=["POST"])
 def binancetest():
 
-    data = json.loads(request.data)
+    try:
 
-    strategy = data["strategy"]
-    ticker = data["ticker"]
-    interval = (data["interval"],)
-    action = data["action"]
-    chartTime = parser.parse(data["time"])
-    chartPrice = data["price"]
+        data = json.loads(request.data)
 
-    client = Client()
+        ticker = data["ticker"]
 
-    response = client.futures_orderbook_ticker(symbol=ticker)
+        proxies = {"http": proxy}
 
-    bid = response["bidPrice"]
-    ask = response["askPrice"]
+        client = UMFutures(proxies=proxies)
 
-    if action == "buy":
-        price = ask
+        response = client.book_ticker(ticker)
+
+    except (ClientError, ServerError) as e:
+
+        return {"error": str(e)}
+
     else:
-        price = bid
 
-    time = datetime.now()
-
-    """
-    alert = Alert(
-        strategy=strategy,
-        ticker=ticker,
-        interval=interval,
-        action=action,
-        chartTime=chartTime,
-        time=time,
-        chartPrice=chartPrice,
-        price=price,
-    )
-
-    db.session.add(alert)
-    db.session.commit()
-    """
-
-    return {"price": price}
+        return {"response": str(response)}
 
 
 @app.route("/alertprice", methods=["POST"])
