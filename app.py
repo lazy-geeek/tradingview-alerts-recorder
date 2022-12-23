@@ -12,6 +12,8 @@ from pybit import usdt_perpetual
 from binance.um_futures import UMFutures
 from binance.spot import Spot as BinanceSpot
 from binance.error import ClientError, ServerError
+from binance.client import Client
+from binance.exceptions import BinanceAPIException, BinanceRequestException
 
 app = Flask(__name__)
 
@@ -186,11 +188,33 @@ def binancetest():
 
         proxies = {"http": proxy}
 
-        client = UMFutures(proxies=proxies)
+        client = UMFutures()
 
         response = client.book_ticker(ticker)
 
     except (ClientError, ServerError) as e:
+
+        return {"error": str(e)}
+
+    else:
+
+        return {"response": str(response)}
+
+
+@app.route("/binancetest2", methods=["POST"])
+def binancetest2():
+
+    try:
+
+        data = json.loads(request.data)
+
+        ticker = data["ticker"]
+
+        client = Client()
+
+        response = client.futures_orderbook_ticker(symbol=ticker)
+
+    except (BinanceRequestException, BinanceAPIException) as e:
 
         return {"error": str(e)}
 
