@@ -1,6 +1,7 @@
 import json
 import os
 import pandas as pd
+import requests
 
 from flask import Flask, request, render_template
 from flask_sqlalchemy import SQLAlchemy
@@ -215,6 +216,30 @@ def binancetest2():
         response = client.futures_orderbook_ticker(symbol=ticker)
 
     except (BinanceRequestException, BinanceAPIException) as e:
+
+        return {"error": str(e)}
+
+    else:
+
+        return {"response": str(response)}
+
+
+@app.route("/binancetest3", methods=["POST"])
+def binancetest3():
+
+    try:
+
+        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+
+        data = json.loads(request.data)
+
+        ticker = data["ticker"]
+
+        r = requests.get(url=url)
+
+        response = r.json()
+
+    except requests.exceptions.RequestException as e:
 
         return {"error": str(e)}
 
