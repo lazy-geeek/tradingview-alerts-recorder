@@ -229,7 +229,7 @@ def binancetest3():
 
     try:
 
-        url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+        url = "https://www.binance.com/fapi/v1/ticker/24hr"
 
         data = json.loads(request.data)
 
