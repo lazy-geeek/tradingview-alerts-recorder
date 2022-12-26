@@ -233,9 +233,13 @@ def binancetest3():
 
         data = json.loads(request.data)
 
+        proxies = {"https": "http://18.159.181.93:8088/"}
+
+        data = json.loads(request.data)
+
         ticker = data["ticker"]
 
-        r = requests.get(url=url)
+        r = requests.get(url=url, proxies=proxies)
 
         response = r.json()
 
