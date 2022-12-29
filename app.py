@@ -22,8 +22,9 @@ load_dotenv()
 
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("SQLALCHEMY_DATABASE_URI")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-proxy = os.getenv("PROXY")
-proxy = f"http://{proxy}"
+if "PROXY" in os.environ:
+    proxy = os.getenv("PROXY")
+    proxies = {"https": proxy}
 
 db = SQLAlchemy(app)
 
@@ -187,9 +188,10 @@ def binancetest():
 
         ticker = data["ticker"]
 
-        proxies = {"http": proxy}
-
-        client = UMFutures()
+        if proxies:
+            client = UMFutures(proxies=proxies)
+        else:
+            client = UMFutures()
 
         response = client.book_ticker(ticker)
 
@@ -231,15 +233,7 @@ def binancetest3():
 
         url = "https://www.binance.com/fapi/v1/ticker/24hr"
 
-        data = json.loads(request.data)
-
-        proxies = {"https": "http://18.159.181.93:8088/"}
-
-        data = json.loads(request.data)
-
-        ticker = data["ticker"]
-
-        r = requests.get(url=url, proxies=proxies)
+        r = requests.get(url=url, proxies=proxies)  # type: ignore
 
         response = r.json()
 
