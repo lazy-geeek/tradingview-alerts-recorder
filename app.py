@@ -96,87 +96,105 @@ def bybitperp():
 @app.route("/binanceperp", methods=["POST"])
 def binanceperp():
 
-    data = json.loads(request.data)
+    try:
 
-    strategy = data["strategy"]
-    ticker = data["ticker"]
-    interval = (data["interval"],)
-    action = data["action"]
-    chartTime = parser.parse(data["time"])
-    chartPrice = data["price"]
+        data = json.loads(request.data)
 
-    client = UMFutures()
+        strategy = data["strategy"]
+        ticker = data["ticker"]
+        interval = (data["interval"],)
+        action = data["action"]
+        chartTime = parser.parse(data["time"])
+        chartPrice = data["price"]
 
-    response = client.book_ticker(ticker)
+        if proxies:
+            client = UMFutures(proxies=proxies)
+        else:
+            client = UMFutures()
 
-    bid = response["bidPrice"]
-    ask = response["askPrice"]
+        response = client.book_ticker(ticker)
 
-    if action == "buy":
-        price = ask
+        bid = response["bidPrice"]
+        ask = response["askPrice"]
+
+        if action == "buy":
+            price = ask
+        else:
+            price = bid
+
+        time = datetime.now()
+
+        alert = Alert(
+            strategy=strategy,
+            ticker=ticker,
+            interval=interval,
+            action=action,
+            chartTime=chartTime,
+            time=time,
+            chartPrice=chartPrice,
+            price=price,
+        )
+
+        db.session.add(alert)
+        db.session.commit()
+
+    except (ClientError, ServerError) as e:
+        return {"error": str(e)}
+
     else:
-        price = bid
-
-    time = datetime.now()
-
-    alert = Alert(
-        strategy=strategy,
-        ticker=ticker,
-        interval=interval,
-        action=action,
-        chartTime=chartTime,
-        time=time,
-        chartPrice=chartPrice,
-        price=price,
-    )
-
-    db.session.add(alert)
-    db.session.commit()
-
-    return {"code": "success"}
+        return {"code": "success"}
 
 
 @app.route("/binancespot", methods=["POST"])
 def binancespot():
 
-    data = json.loads(request.data)
+    try:
 
-    strategy = data["strategy"]
-    ticker = data["ticker"]
-    interval = (data["interval"],)
-    action = data["action"]
-    chartTime = parser.parse(data["time"])
-    chartPrice = data["price"]
+        data = json.loads(request.data)
 
-    client = BinanceSpot()
+        strategy = data["strategy"]
+        ticker = data["ticker"]
+        interval = (data["interval"],)
+        action = data["action"]
+        chartTime = parser.parse(data["time"])
+        chartPrice = data["price"]
 
-    response = client.book_ticker(ticker)
+        if proxies:
+            client = BinanceSpot(proxies=proxies)
+        else:
+            client = BinanceSpot()
 
-    bid = response["bidPrice"]
-    ask = response["askPrice"]
+        response = client.book_ticker(ticker)
 
-    if action == "buy":
-        price = ask
+        bid = response["bidPrice"]
+        ask = response["askPrice"]
+
+        if action == "buy":
+            price = ask
+        else:
+            price = bid
+
+        time = datetime.now()
+
+        alert = Alert(
+            strategy=strategy,
+            ticker=ticker,
+            interval=interval,
+            action=action,
+            chartTime=chartTime,
+            time=time,
+            chartPrice=chartPrice,
+            price=price,
+        )
+
+        db.session.add(alert)
+        db.session.commit()
+
+    except (ClientError, ServerError) as e:
+        return {"error": str(e)}
+
     else:
-        price = bid
-
-    time = datetime.now()
-
-    alert = Alert(
-        strategy=strategy,
-        ticker=ticker,
-        interval=interval,
-        action=action,
-        chartTime=chartTime,
-        time=time,
-        chartPrice=chartPrice,
-        price=price,
-    )
-
-    db.session.add(alert)
-    db.session.commit()
-
-    return {"code": "success"}
+        return {"code": "success"}
 
 
 @app.route("/binancetest", methods=["POST"])
