@@ -233,7 +233,10 @@ def binancetest3():
 
         url = "https://www.binance.com/fapi/v1/ticker/24hr"
 
-        r = requests.get(url=url, proxies=proxies)  # type: ignore
+        if proxies:
+            r = requests.get(url=url, proxies=proxies)  # type: ignore
+        else:
+            r = requests.get(url=url)  # type: ignore
 
         response = r.json()
 
