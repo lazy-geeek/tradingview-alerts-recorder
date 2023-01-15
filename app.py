@@ -24,7 +24,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("SQLALCHEMY_DATABASE_URI")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 if "PROXY" in os.environ:
     proxy = os.getenv("PROXY")
-    proxies = {"https": proxy}
+    proxies = {"http": proxy}
 
 db = SQLAlchemy(app)
 
