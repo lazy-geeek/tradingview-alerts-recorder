@@ -6,7 +6,7 @@ import requests
 from flask import Flask, request, render_template
 from flask_sqlalchemy import SQLAlchemy
 from pprint import pprint
-from dotenv import load_dotenv
+from decouple import config
 from datetime import datetime
 from dateutil import parser
 from pybit import usdt_perpetual
@@ -18,13 +18,8 @@ from binance.exceptions import BinanceAPIException, BinanceRequestException
 
 app = Flask(__name__)
 
-load_dotenv()
-
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("SQLALCHEMY_DATABASE_URI")
+app.config["SQLALCHEMY_DATABASE_URI"] = config("SQLALCHEMY_DATABASE_URI")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-if "PROXY" in os.environ:
-    proxy = os.getenv("PROXY")
-    proxies = {"http": proxy}
 
 db = SQLAlchemy(app)
 
@@ -107,10 +102,7 @@ def binanceperp():
         chartTime = parser.parse(data["time"])
         chartPrice = data["price"]
 
-        if proxies:
-            client = UMFutures(proxies=proxies)
-        else:
-            client = UMFutures()
+        client = UMFutures()
 
         response = client.book_ticker(ticker)
 
@@ -159,10 +151,7 @@ def binancespot():
         chartTime = parser.parse(data["time"])
         chartPrice = data["price"]
 
-        if proxies:
-            client = BinanceSpot(proxies=proxies)
-        else:
-            client = BinanceSpot()
+        client = BinanceSpot()
 
         response = client.book_ticker(ticker)
 
@@ -206,10 +195,7 @@ def binancetest():
 
         ticker = data["ticker"]
 
-        if proxies:
-            client = UMFutures(proxies=proxies)
-        else:
-            client = UMFutures()
+        client = UMFutures()
 
         response = client.book_ticker(ticker)
 
@@ -251,10 +237,7 @@ def binancetest3():
 
         url = "https://www.binance.com/fapi/v1/ticker/24hr"
 
-        if proxies:
-            r = requests.get(url=url, proxies=proxies)  # type: ignore
-        else:
-            r = requests.get(url=url)  # type: ignore
+        r = requests.get(url=url)  # type: ignore
 
         response = r.json()
 

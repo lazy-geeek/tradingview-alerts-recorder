@@ -10,3 +10,4 @@ pandas
 binance-futures-connector
 binance-connector
 python-binance
+python-decouple
