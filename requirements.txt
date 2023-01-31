@@ -9,5 +9,6 @@ python-dateutil
 pandas
 binance-futures-connector
 binance-connector
-python-binance
 python-decouple
+dydx-v3-python
+web3

@@ -13,20 +13,23 @@ from pybit import usdt_perpetual
 from binance.um_futures import UMFutures
 from binance.spot import Spot as BinanceSpot
 from binance.error import ClientError, ServerError
-from binance.client import Client
-from binance.exceptions import BinanceAPIException, BinanceRequestException
+from dydx3 import Client as dydxClient
+from dydx3.constants import API_HOST_MAINNET
+from dydx3.errors import DydxError
+from web3 import Web3
 
 app = Flask(__name__)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = config("SQLALCHEMY_DATABASE_URI")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+HTTP_PROVIDER = config("HTTP_PROVIDER")
 
 db = SQLAlchemy(app)
 
 app.app_context().push()
 
 
-class Alert(db.Model):  # type: ignore
+class tvAlert(db.Model):  # type: ignore
     id = db.Column(db.Integer, primary_key=True)
     strategy = db.Column(db.String(100))
     ticker = db.Column(db.String(20))
@@ -71,7 +74,7 @@ def bybitperp():
 
     time = datetime.now()
 
-    alert = Alert(
+    alert = tvAlert(
         strategy=strategy,
         ticker=ticker,
         interval=interval,
@@ -86,6 +89,56 @@ def bybitperp():
     db.session.commit()
 
     return {"code": "success"}
+
+
+@app.route("/dydx", methods=["POST"])
+def dydx():
+
+    try:
+        data = json.loads(request.data)
+
+        ticker = data["ticker"]
+        strategy = data["strategy"]
+        interval = (data["interval"],)
+        action = data["action"]
+        chartTime = parser.parse(data["time"])
+        chartPrice = data["price"]
+
+        client = dydxClient(
+            host=API_HOST_MAINNET,
+            web3=Web3(Web3.HTTPProvider(HTTP_PROVIDER)),  # type: ignore
+        )
+
+        response = client.public.get_orderbook(ticker)
+
+        bid = response.data["bids"][0]["price"]
+        ask = response.data["asks"][0]["price"]
+
+        if action == "buy":
+            price = ask
+        else:
+            price = bid
+
+        time = datetime.now()
+
+        alert = tvAlert(
+            strategy=strategy,
+            ticker=ticker,
+            interval=interval,
+            action=action,
+            chartTime=chartTime,
+            time=time,
+            chartPrice=chartPrice,
+            price=price,
+        )
+
+        db.session.add(alert)
+        db.session.commit()
+
+    except (DydxError) as e:
+        return {"error": str(e)}  # type: ignore
+    else:
+        return {"code": "success"}
 
 
 @app.route("/binanceperp", methods=["POST"])
@@ -116,7 +169,7 @@ def binanceperp():
 
         time = datetime.now()
 
-        alert = Alert(
+        alert = tvAlert(
             strategy=strategy,
             ticker=ticker,
             interval=interval,
@@ -130,9 +183,10 @@ def binanceperp():
         db.session.add(alert)
         db.session.commit()
 
-    except (ClientError, ServerError) as e:
-        return {"error": str(e)}
-
+    except (ClientError) as e:
+        return {"error": str(e.error_message)}
+    except (ServerError) as e:
+        return {"error": str(e.message)}
     else:
         return {"code": "success"}
 
@@ -165,7 +219,7 @@ def binancespot():
 
         time = datetime.now()
 
-        alert = Alert(
+        alert = tvAlert(
             strategy=strategy,
             ticker=ticker,
             interval=interval,
@@ -179,9 +233,10 @@ def binancespot():
         db.session.add(alert)
         db.session.commit()
 
-    except (ClientError, ServerError) as e:
-        return {"error": str(e)}
-
+    except (ClientError) as e:
+        return {"error": str(e.error_message)}
+    except (ServerError) as e:
+        return {"error": str(e.message)}
     else:
         return {"code": "success"}
 
@@ -199,54 +254,11 @@ def binancetest():
 
         response = client.book_ticker(ticker)
 
-    except (ClientError, ServerError) as e:
-
-        return {"error": str(e)}
-
+    except (ClientError) as e:
+        return {"error": str(e.error_message)}
+    except (ServerError) as e:
+        return {"error": str(e.message)}
     else:
-
-        return {"response": str(response)}
-
-
-@app.route("/binancetest2", methods=["POST"])
-def binancetest2():
-
-    try:
-
-        data = json.loads(request.data)
-
-        ticker = data["ticker"]
-
-        client = Client()
-
-        response = client.futures_orderbook_ticker(symbol=ticker)
-
-    except (BinanceRequestException, BinanceAPIException) as e:
-
-        return {"error": str(e)}
-
-    else:
-
-        return {"response": str(response)}
-
-
-@app.route("/binancetest3", methods=["POST"])
-def binancetest3():
-
-    try:
-
-        url = "https://www.binance.com/fapi/v1/ticker/24hr"
-
-        r = requests.get(url=url)  # type: ignore
-
-        response = r.json()
-
-    except requests.exceptions.RequestException as e:
-
-        return {"error": str(e)}
-
-    else:
-
         return {"response": str(response)}
 
 
@@ -264,7 +276,7 @@ def alertprice():
     price = chartPrice
     time = datetime.now()
 
-    alert = Alert(
+    alert = tvAlert(
         strategy=strategy,
         ticker=ticker,
         interval=interval,
@@ -304,7 +316,7 @@ def trade():
     if strategyPar is not None:
         strategies.append(strategyPar)
     else:
-        strategyRows = db.session.query(Alert.strategy).distinct().all()
+        strategyRows = db.session.query(tvAlert.strategy).distinct().all()
         for strategyRow in strategyRows:
             strategy = strategyRow["strategy"]
             strategies.append(strategy)
@@ -317,8 +329,8 @@ def trade():
             tickers.append(tickerPar)
         else:
             tickerRows = (
-                db.session.query(Alert.ticker)
-                .filter(Alert.strategy == strategy)
+                db.session.query(tvAlert.ticker)
+                .filter(tvAlert.strategy == strategy)
                 .distinct()
                 .all()
             )
@@ -331,8 +343,8 @@ def trade():
             intervals = []
 
             intervalRows = (
-                db.session.query(Alert.interval)
-                .filter(Alert.strategy == strategy, Alert.ticker == ticker)
+                db.session.query(tvAlert.interval)
+                .filter(tvAlert.strategy == strategy, tvAlert.ticker == ticker)
                 .distinct()
                 .all()
             )
@@ -343,12 +355,12 @@ def trade():
             for interval in intervals:
 
                 alerts = (
-                    Alert.query.filter(
-                        Alert.strategy == strategy,
-                        Alert.ticker == ticker,
-                        Alert.interval == interval,
+                    tvAlert.query.filter(
+                        tvAlert.strategy == strategy,
+                        tvAlert.ticker == ticker,
+                        tvAlert.interval == interval,
                     )
-                    .order_by(Alert.id)
+                    .order_by(tvAlert.id)
                     .all()
                 )
 
