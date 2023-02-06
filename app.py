@@ -241,27 +241,6 @@ def binancespot():
         return {"code": "success"}
 
 
-@app.route("/binancetest", methods=["POST"])
-def binancetest():
-
-    try:
-
-        data = json.loads(request.data)
-
-        ticker = data["ticker"]
-
-        client = UMFutures()
-
-        response = client.book_ticker(ticker)
-
-    except (ClientError) as e:
-        return {"error": str(e.error_message)}
-    except (ServerError) as e:
-        return {"error": str(e.message)}
-    else:
-        return {"response": str(response)}
-
-
 @app.route("/alertprice", methods=["POST"])
 def alertprice():
 
@@ -318,7 +297,7 @@ def trade():
     else:
         strategyRows = db.session.query(tvAlert.strategy).distinct().all()
         for strategyRow in strategyRows:
-            strategy = strategyRow["strategy"]
+            strategy = strategyRow[0]
             strategies.append(strategy)
 
     for strategy in strategies:
@@ -335,7 +314,7 @@ def trade():
                 .all()
             )
             for tickerRow in tickerRows:
-                ticker = tickerRow["ticker"]
+                ticker = tickerRow[0]
                 tickers.append(ticker)
 
         for ticker in tickers:
@@ -349,7 +328,7 @@ def trade():
                 .all()
             )
             for intervalRow in intervalRows:
-                interval = intervalRow["interval"]
+                interval = intervalRow[0]
                 intervals.append(interval)
 
             for interval in intervals:
